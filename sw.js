@@ -1,7 +1,6 @@
 const CACHE = 'gm-v12';
 
-// ── GitHub Pages: الحصول على المسار الصحيح تلقائياً ──
-const BASE = self.registration.scope; // مثال: https://firasgoldenmark-feras.github.io/goldenmarkdelivery/
+const BASE = self.registration.scope;
 
 const STATIC = [
   BASE,
@@ -26,13 +25,29 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE).map(k => caches.delete(k))
+      ))
       .then(() => self.clients.claim())
+      .then(() => {
+        // أخبر جميع الصفحات المفتوحة بإعادة التحميل
+        self.clients.matchAll({type:'window'}).then(clients => {
+          clients.forEach(c => c.postMessage({type:'RELOAD'}));
+        });
+      })
   );
+});
+
+// استقبال SKIP_WAITING من الصفحة
+self.addEventListener('message', e => {
+  if(e.data && e.data.type === 'SKIP_WAITING'){
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || e.request.url.startsWith('blob:')) return;
+
   const isAPI = e.request.url.includes('anthropic.com') ||
                 e.request.url.includes('nominatim') ||
                 e.request.url.includes('worldtimeapi');
@@ -42,6 +57,7 @@ self.addEventListener('fetch', e => {
     ));
     return;
   }
+
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
